@@ -1,9 +1,10 @@
 package groto
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"fmt"
+	"log"
 )
 
 type Status byte
@@ -18,6 +19,7 @@ const (
 const (
 	initLen    = 1 + 3 + 10 + 20
 	confirmLen = 3 + 10 + 10 + 32
+	resultLen  = 3 + 10 + 1
 )
 
 var version = []byte{0, 0, 1}
@@ -88,15 +90,11 @@ func InitApproval(b []byte) bool {
 }
 
 func ParseInit(b []byte) (ProtoInit, error) {
-	if len(b) != initLen {
-		return ProtoInit{}, fmt.Errorf("unexpected len got: %v, want: %v", len(b), initLen)
-	}
-
 	return ProtoInit{
 		status:  Status(b[0]),
 		version: b[1:4],
-		id:      b[4:15],
-		pwhash:  b[15:34],
+		id:      b[4:14],
+		pwhash:  b[14:initLen],
 	}, nil
 }
 
@@ -119,29 +117,86 @@ func NewProtoConfirm(id []byte, user []byte, hPw []byte) ProtoConfirm {
 func (p *ProtoConfirm) Build() []byte {
 	b := make([]byte, 0, confirmLen)
 
-	b = append(b, p.id...)
-	b = append(b, p.user...)
-	b = append(b, p.hPw...)
+	user := make([]byte, 10)
+	copy(user, p.user)
+	hPw := make([]byte, 32)
+	copy(hPw, p.hPw)
 
+	b = append(b, p.version...)
+	b = append(b, p.id...)
+	b = append(b, user...)
+	b = append(b, hPw...)
 	return b
 }
 
-func ParseConfirm(b []byte) (ProtoConfirm, error) {
-	if len(b) != confirmLen {
-		return ProtoConfirm{}, fmt.Errorf("unexpected len got: %v, want: %v", len(b), confirmLen)
-	}
+func (p *ProtoConfirm) Id() []byte {
+	return p.id
+}
 
-	return ProtoConfirm{
+func (p *ProtoConfirm) Confirm(id, user, hpw []byte) bool {
+	if !bytes.Equal(p.id, id) {
+		log.Printf("ID: %X, %X", p.id, id)
+		return false
+	}
+	if !bytes.Equal(p.user, user) {
+		log.Printf("USER: %X, %X", p.user, user)
+		return false
+	}
+	if !bytes.Equal(p.hPw, hpw) {
+		log.Printf("PW: %X, %X", p.hPw, hpw)
+		return false
+	}
+	return true
+}
+
+func ParseConfirm(b []byte) (ProtoConfirm, error) {
+	p := ProtoConfirm{
 		version: b[0:3],
 		id:      b[3:13],
 		user:    b[13:23],
 		hPw:     b[23:confirmLen],
-	}, nil
-
+	}
+	return p, nil
 }
 
-func HashPw(key, pw []byte) []byte {
-	h := sha256.New()
-	h.Write(key)
-	return h.Sum(pw)
+func HashPw(key, pw []byte) [32]byte {
+	b := append(key, pw...)
+	return sha256.Sum256(b)
+}
+
+type ProtoConfirmResult struct {
+	version []byte
+	id      []byte
+	status  Status
+}
+
+func NewProtoConfirmResult(id []byte, status Status) ProtoConfirmResult {
+	return ProtoConfirmResult{
+		version: version,
+		id:      id,
+		status:  status,
+	}
+}
+
+func (p *ProtoConfirmResult) Build() []byte {
+	b := make([]byte, 0, resultLen)
+
+	b = append(b, p.version...)
+	b = append(b, p.id...)
+	b = append(b, byte(p.status))
+
+	return b
+}
+
+func (p *ProtoConfirmResult) IsOk() bool {
+	return p.status == OK
+}
+
+func ParseConfirmResult(b []byte) (ProtoConfirmResult, error) {
+	return ProtoConfirmResult{
+		version: b[0:3],
+		id:      b[3:13],
+		status:  Status(b[13]),
+	}, nil
+
 }

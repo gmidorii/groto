@@ -38,18 +38,29 @@ func request(port int, address, user, password string) error {
 	}
 	log.Println("OK Handshake")
 
+	// confirm
 	hPw := groto.HashPw(i.PwHash(), []byte(password))
-	c := groto.NewProtoConfirm(i.Id(), []byte(user), hPw)
+	c := groto.NewProtoConfirm(i.Id(), []byte(user), hPw[:])
 	_, err = conn.Write(c.Build())
 	if err != nil {
 		return err
 	}
 
-	b = make([]byte, 10)
+	b = make([]byte, 14)
 	_, err = conn.Read(b)
 	if err != nil {
 		return err
 	}
+	r, err := groto.ParseConfirmResult(b)
+	if err != nil {
+		return err
+	}
+	if !r.IsOk() {
+		return errors.New("user/password do not match")
+	}
+	log.Println("OK Confirm")
+
+	// implementation
 
 	return nil
 }

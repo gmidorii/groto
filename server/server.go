@@ -11,6 +11,8 @@ import (
 )
 
 const dPort = "3030"
+const user = "user"
+const password = "password"
 
 func accept(conn net.Conn) {
 	defer func() {
@@ -50,7 +52,7 @@ func accept(conn net.Conn) {
 	}
 	conn.Write(i.Build())
 
-	_, err := conn.Read(b)
+	_, err = conn.Read(b)
 	if err != nil {
 		log.Println("[ERROR] failed read connection")
 		return
@@ -58,7 +60,24 @@ func accept(conn net.Conn) {
 
 	c, err := groto.ParseConfirm(b)
 	if err != nil {
-		log.Println("[ERROR] failed parse confirm packet")
+		log.Printf("[ERROR] failed parse confirm packet: %v", err)
+		return
+	}
+	u := make([]byte, 10)
+	copy(u, []byte(user))
+	p := groto.HashPw(i.PwHash(), []byte(password))
+
+	if !c.Confirm(i.Id(), u, p[:]) {
+		r := groto.NewProtoConfirmResult(c.Id(), groto.NG)
+		_, err = conn.Write(r.Build())
+		if err != nil {
+			return
+		}
+		return
+	}
+	r := groto.NewProtoConfirmResult(c.Id(), groto.OK)
+	_, err = conn.Write(r.Build())
+	if err != nil {
 		return
 	}
 
