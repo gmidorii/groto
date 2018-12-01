@@ -11,8 +11,6 @@ import (
 )
 
 const dPort = "3030"
-const user = "user"
-const password = "password"
 
 func accept(conn net.Conn) {
 	defer func() {
@@ -21,63 +19,8 @@ func accept(conn net.Conn) {
 	}()
 	log.Printf("Accept: %v", conn.RemoteAddr())
 
-	b := make([]byte, 2*1024)
-	_, err := conn.Read(b)
-	if err != nil {
-		log.Println("[ERROR] failed read connection")
-		return
-	}
-
-	if !groto.InitApproval(b) {
-		i, err := groto.NewProtoInit(groto.NG)
-		if err != nil {
-			log.Println("[ERROR] failed create init proto")
-			return
-		}
-		_, err = conn.Write(i.Build())
-		if err != nil {
-			log.Println("[ERROR] failed write")
-			return
-		}
-
-		log.Println("[ERROR] connection first byte must be 0x05")
-		return
-	}
-	log.Println("OK Connection")
-
-	i, err := groto.NewProtoInit(groto.OK)
-	if err != nil {
-		log.Println("[ERROR] failed create init proto")
-		return
-	}
-	conn.Write(i.Build())
-
-	_, err = conn.Read(b)
-	if err != nil {
-		log.Println("[ERROR] failed read connection")
-		return
-	}
-
-	c, err := groto.ParseConfirm(b)
-	if err != nil {
-		log.Printf("[ERROR] failed parse confirm packet: %v", err)
-		return
-	}
-	u := make([]byte, 10)
-	copy(u, []byte(user))
-	p := groto.HashPw(i.PwHash(), []byte(password))
-
-	if !c.Confirm(i.Id(), u, p[:]) {
-		r := groto.NewProtoConfirmResult(c.Id(), groto.NG)
-		_, err = conn.Write(r.Build())
-		if err != nil {
-			return
-		}
-		return
-	}
-	r := groto.NewProtoConfirmResult(c.Id(), groto.OK)
-	_, err = conn.Write(r.Build())
-	if err != nil {
+	s := groto.NewServer()
+	if err := s.Do(conn); err != nil {
 		return
 	}
 
