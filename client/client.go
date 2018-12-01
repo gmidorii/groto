@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -17,48 +16,10 @@ func request(port int, address, user, password string) error {
 	}
 	defer conn.Close()
 
-	// init
-	_, err = conn.Write([]byte{0x05})
-	if err != nil {
+	cli := groto.NewClient(user, password)
+	if err := cli.Do(conn); err != nil {
 		return err
 	}
-
-	// init result
-	b := make([]byte, 34)
-	_, err = conn.Read(b)
-	if err != nil {
-		return err
-	}
-	i, err := groto.ParseInit(b)
-	if err != nil {
-		return err
-	}
-	if !i.IsOk() {
-		return errors.New("failed init")
-	}
-	log.Println("OK Handshake")
-
-	// confirm
-	hPw := groto.HashPw(i.PwHash(), []byte(password))
-	c := groto.NewProtoConfirm(i.Id(), []byte(user), hPw[:])
-	_, err = conn.Write(c.Build())
-	if err != nil {
-		return err
-	}
-
-	b = make([]byte, 14)
-	_, err = conn.Read(b)
-	if err != nil {
-		return err
-	}
-	r, err := groto.ParseConfirmResult(b)
-	if err != nil {
-		return err
-	}
-	if !r.IsOk() {
-		return errors.New("user/password do not match")
-	}
-	log.Println("OK Confirm")
 
 	// implementation
 
