@@ -2,12 +2,83 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
+
+	"github.com/midorigreen/groto"
 )
 
 const dPort = "3030"
+
+func accept(conn net.Conn) {
+	defer func() {
+		log.Println("Close")
+		conn.Close()
+	}()
+	log.Printf("Accept: %v", conn.RemoteAddr())
+
+	b := make([]byte, 2*1024)
+	_, err := conn.Read(b)
+	if err != nil {
+		log.Println("[ERROR] failed read connection")
+		return
+	}
+
+	if !groto.InitApproval(b) {
+		i, err := groto.NewProtoInit(groto.NG)
+		if err != nil {
+			log.Println("[ERROR] failed create init proto")
+			return
+		}
+		_, err = conn.Write(i.Build())
+		if err != nil {
+			log.Println("[ERROR] failed write")
+			return
+		}
+
+		log.Println("[ERROR] connection first byte must be 0x05")
+		return
+	}
+	log.Println("OK Connection")
+
+	i, err := groto.NewProtoInit(groto.OK)
+	if err != nil {
+		log.Println("[ERROR] failed create init proto")
+		return
+	}
+	conn.Write(i.Build())
+
+	_, err := conn.Read(b)
+	if err != nil {
+		log.Println("[ERROR] failed read connection")
+		return
+	}
+
+	c, err := groto.ParseConfirm(b)
+	if err != nil {
+		log.Println("[ERROR] failed parse confirm packet")
+		return
+	}
+
+	for {
+		b := make([]byte, 2*1024)
+		_, err := conn.Read(b)
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+
+			log.Println("[ERROR] failed read content connection")
+			return
+		}
+
+		fmt.Printf("%b\n", b)
+		fmt.Printf("%X\n", b)
+		fmt.Printf("%v\n", string(b))
+	}
+}
 
 func listen() error {
 	port := dPort
@@ -24,39 +95,7 @@ func listen() error {
 		if err != nil {
 			log.Println(err)
 		}
-
-		go func() {
-			defer func() {
-				log.Println("Close")
-				conn.Close()
-			}()
-			log.Printf("Accept: %v", conn.RemoteAddr())
-
-			b := make([]byte, 2*1024)
-			_, err := conn.Read(b)
-			if err != nil {
-				log.Println("[ERROR] failed read connection")
-				return
-			}
-			if b[0] != 0x05 {
-				log.Println("[ERROR] connection first byte must be 0x05")
-				return
-			}
-			log.Println("OK Connection")
-
-			for {
-				b := make([]byte, 2*1024)
-				_, err := conn.Read(b)
-				if err != nil {
-					log.Println("[ERROR] failed read content connection")
-					return
-				}
-
-				fmt.Printf("%b\n", b)
-				fmt.Printf("%X\n", b)
-				fmt.Printf("%v\n", string(b))
-			}
-		}()
+		go accept(conn)
 	}
 }
 
