@@ -20,16 +20,16 @@ func NewServer() *Server {
 }
 
 func (s *Server) Do(conn net.Conn) error {
-	if err := s.stepInit(conn); err != nil {
+	if err := s.stepHandshake(conn); err != nil {
 		return err
 	}
-	if err := s.stepConfirm(conn); err != nil {
+	if err := s.stepAuthN(conn); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Server) stepInit(conn net.Conn) error {
+func (s *Server) stepHandshake(conn net.Conn) error {
 	b := make([]byte, readLen)
 	_, err := conn.Read(b)
 	if err != nil {
@@ -62,7 +62,7 @@ func (s *Server) stepInit(conn net.Conn) error {
 	return nil
 }
 
-func (s *Server) stepConfirm(conn net.Conn) error {
+func (s *Server) stepAuthN(conn net.Conn) error {
 	b := make([]byte, readLen)
 	_, err := conn.Read(b)
 	if err != nil {

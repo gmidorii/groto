@@ -24,6 +24,13 @@ const (
 
 var version = []byte{0, 0, 1}
 
+func InitApproval(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+	return b[0] == byte(Init)
+}
+
 type PacketHandshake struct {
 	status    Status
 	version   []byte
@@ -70,12 +77,6 @@ func (i *PacketHandshake) Marshal() []byte {
 	return b
 }
 
-func InitApproval(b []byte) bool {
-	if len(b) == 0 {
-		return false
-	}
-	return b[0] == byte(Init)
-}
 
 func UnmarshalHandshake(b []byte) (PacketHandshake, error) {
 	return PacketHandshake{
