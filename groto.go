@@ -24,16 +24,16 @@ const (
 
 var version = []byte{0, 0, 1}
 
-type ProtoInit struct {
-	status  Status
-	version []byte
-	id      []byte
-	pwhash  []byte
+type PacketHandshake struct {
+	status    Status
+	version   []byte
+	id        []byte
+	pwHashKey []byte
 }
 
-func NewProtoInit(s Status) (ProtoInit, error) {
+func NewPacketHandshake(s Status) (PacketHandshake, error) {
 	if s != OK {
-		return ProtoInit{
+		return PacketHandshake{
 			status:  s,
 			version: version,
 		}, nil
@@ -42,44 +42,32 @@ func NewProtoInit(s Status) (ProtoInit, error) {
 	id := make([]byte, 10)
 	_, err := rand.Read(id)
 	if err != nil {
-		return ProtoInit{}, err
+		return PacketHandshake{}, err
 	}
 
 	pwhash := make([]byte, 20)
 	_, err = rand.Read(pwhash)
 	if err != nil {
-		return ProtoInit{}, err
+		return PacketHandshake{}, err
 	}
 
-	return ProtoInit{
-		status:  OK,
-		version: version,
-		id:      id,
-		pwhash:  pwhash,
+	return PacketHandshake{
+		status:    OK,
+		version:   version,
+		id:        id,
+		pwHashKey: pwhash,
 	}, nil
 }
 
-func (i *ProtoInit) Build() []byte {
+func (i *PacketHandshake) Marshal() []byte {
 	b := make([]byte, 0, initLen)
 
 	b = append(b, byte(i.status))
 	b = append(b, i.version...)
 	b = append(b, i.id...)
-	b = append(b, i.pwhash...)
+	b = append(b, i.pwHashKey...)
 
 	return b
-}
-
-func (i *ProtoInit) IsOk() bool {
-	return i.status == OK
-}
-
-func (i *ProtoInit) Id() []byte {
-	return i.id
-}
-
-func (i *ProtoInit) PwHash() []byte {
-	return i.pwhash
 }
 
 func InitApproval(b []byte) bool {
@@ -89,24 +77,24 @@ func InitApproval(b []byte) bool {
 	return b[0] == byte(Init)
 }
 
-func ParseInit(b []byte) (ProtoInit, error) {
-	return ProtoInit{
-		status:  Status(b[0]),
-		version: b[1:4],
-		id:      b[4:14],
-		pwhash:  b[14:initLen],
+func UnmarshalHandshake(b []byte) (PacketHandshake, error) {
+	return PacketHandshake{
+		status:    Status(b[0]),
+		version:   b[1:4],
+		id:        b[4:14],
+		pwHashKey: b[14:initLen],
 	}, nil
 }
 
-type ProtoConfirm struct {
+type PacketAuthN struct {
 	version []byte
 	id      []byte
 	user    []byte
 	hPw     []byte
 }
 
-func NewProtoConfirm(id []byte, user []byte, hPw []byte) ProtoConfirm {
-	return ProtoConfirm{
+func NewProtoConfirm(id []byte, user []byte, hPw []byte) PacketAuthN {
+	return PacketAuthN{
 		version: version,
 		id:      id,
 		user:    user,
@@ -114,7 +102,7 @@ func NewProtoConfirm(id []byte, user []byte, hPw []byte) ProtoConfirm {
 	}
 }
 
-func (p *ProtoConfirm) Build() []byte {
+func (p *PacketAuthN) Marshal() []byte {
 	b := make([]byte, 0, confirmLen)
 
 	user := make([]byte, 10)
@@ -129,11 +117,11 @@ func (p *ProtoConfirm) Build() []byte {
 	return b
 }
 
-func (p *ProtoConfirm) Id() []byte {
+func (p *PacketAuthN) Id() []byte {
 	return p.id
 }
 
-func (p *ProtoConfirm) Confirm(id, user, hpw []byte) bool {
+func (p *PacketAuthN) Confirm(id, user, hpw []byte) bool {
 	if !bytes.Equal(p.id, id) {
 		log.Printf("ID: %X, %X", p.id, id)
 		return false
@@ -149,8 +137,8 @@ func (p *ProtoConfirm) Confirm(id, user, hpw []byte) bool {
 	return true
 }
 
-func ParseConfirm(b []byte) (ProtoConfirm, error) {
-	p := ProtoConfirm{
+func UnmarshalAuthN(b []byte) (PacketAuthN, error) {
+	p := PacketAuthN{
 		version: b[0:3],
 		id:      b[3:13],
 		user:    b[13:23],
@@ -164,21 +152,21 @@ func HashPw(key, pw []byte) [32]byte {
 	return sha256.Sum256(b)
 }
 
-type ProtoConfirmResult struct {
+type PacketAuthNResult struct {
 	version []byte
 	id      []byte
 	status  Status
 }
 
-func NewProtoConfirmResult(id []byte, status Status) ProtoConfirmResult {
-	return ProtoConfirmResult{
+func NewPacketAuthNResult(id []byte, status Status) PacketAuthNResult {
+	return PacketAuthNResult{
 		version: version,
 		id:      id,
 		status:  status,
 	}
 }
 
-func (p *ProtoConfirmResult) Build() []byte {
+func (p *PacketAuthNResult) Marshal() []byte {
 	b := make([]byte, 0, resultLen)
 
 	b = append(b, p.version...)
@@ -188,12 +176,12 @@ func (p *ProtoConfirmResult) Build() []byte {
 	return b
 }
 
-func (p *ProtoConfirmResult) IsOk() bool {
+func (p *PacketAuthNResult) IsOk() bool {
 	return p.status == OK
 }
 
-func ParseConfirmResult(b []byte) (ProtoConfirmResult, error) {
-	return ProtoConfirmResult{
+func UnmarshalAuthNResult(b []byte) (PacketAuthNResult, error) {
+	return PacketAuthNResult{
 		version: b[0:3],
 		id:      b[3:13],
 		status:  Status(b[13]),

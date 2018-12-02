@@ -37,11 +37,11 @@ func (s *Server) stepInit(conn net.Conn) error {
 	}
 
 	if !InitApproval(b) {
-		i, err := NewProtoInit(NG)
+		i, err := NewPacketHandshake(NG)
 		if err != nil {
 			return fmt.Errorf("failed create init proto: %v", err)
 		}
-		_, err = conn.Write(i.Build())
+		_, err = conn.Write(i.Marshal())
 		if err != nil {
 			return fmt.Errorf("failed write: %v", err)
 		}
@@ -50,15 +50,15 @@ func (s *Server) stepInit(conn net.Conn) error {
 	}
 	log.Println("OK Connection")
 
-	i, err := NewProtoInit(OK)
+	i, err := NewPacketHandshake(OK)
 	if err != nil {
 		return fmt.Errorf("failed create init proto: %v", err)
 	}
-	_, err = conn.Write(i.Build())
+	_, err = conn.Write(i.Marshal())
 	if err != nil {
 		return err
 	}
-	s.hashKey = i.pwhash
+	s.hashKey = i.pwHashKey
 	return nil
 }
 
@@ -69,7 +69,7 @@ func (s *Server) stepConfirm(conn net.Conn) error {
 		return fmt.Errorf("failed read connection: %v", err)
 	}
 
-	c, err := ParseConfirm(b)
+	c, err := UnmarshalAuthN(b)
 	if err != nil {
 		return fmt.Errorf("failed parse confirm packet: %v", err)
 	}
@@ -78,15 +78,15 @@ func (s *Server) stepConfirm(conn net.Conn) error {
 	p := HashPw(s.hashKey, []byte(password))
 
 	if !c.Confirm(c.id, u, p[:]) {
-		r := NewProtoConfirmResult(c.Id(), NG)
-		_, err = conn.Write(r.Build())
+		r := NewPacketAuthNResult(c.Id(), NG)
+		_, err = conn.Write(r.Marshal())
 		if err != nil {
 			return err
 		}
 		return nil
 	}
-	r := NewProtoConfirmResult(c.Id(), OK)
-	_, err = conn.Write(r.Build())
+	r := NewPacketAuthNResult(c.Id(), OK)
+	_, err = conn.Write(r.Marshal())
 	if err != nil {
 		return err
 	}

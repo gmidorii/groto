@@ -7,10 +7,10 @@ import (
 )
 
 type Client struct {
-	user     string
-	password string
-	id       []byte
-	hashKey  []byte
+	user      string
+	password  string
+	id        []byte
+	pwHashKey []byte
 }
 
 func NewClient(user, password string) *Client {
@@ -21,16 +21,16 @@ func NewClient(user, password string) *Client {
 }
 
 func (c *Client) Do(conn net.Conn) error {
-	if err := c.stepInit(conn); err != nil {
+	if err := c.stepHandshake(conn); err != nil {
 		return err
 	}
-	if err := c.stepConfirm(conn); err != nil {
+	if err := c.stepAuthN(conn); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) stepInit(conn net.Conn) error {
+func (c *Client) stepHandshake(conn net.Conn) error {
 	_, err := conn.Write([]byte{byte(Init)})
 	if err != nil {
 		return err
@@ -41,24 +41,24 @@ func (c *Client) stepInit(conn net.Conn) error {
 	if err != nil {
 		return err
 	}
-	i, err := ParseInit(b)
+	i, err := UnmarshalHandshake(b)
 	if err != nil {
 		return err
 	}
-	if !i.IsOk() {
+	if i.status != OK {
 		return errors.New("failed init")
 	}
 	log.Println("OK Handshake")
 	c.id = i.id
-	c.hashKey = i.pwhash
+	c.pwHashKey = i.pwHashKey
 
 	return nil
 }
 
-func (c *Client) stepConfirm(conn net.Conn) error {
-	hPw := HashPw(c.hashKey, []byte(c.password))
+func (c *Client) stepAuthN(conn net.Conn) error {
+	hPw := HashPw(c.pwHashKey, []byte(c.password))
 	proto := NewProtoConfirm(c.id, []byte(c.user), hPw[:])
-	_, err := conn.Write(proto.Build())
+	_, err := conn.Write(proto.Marshal())
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (c *Client) stepConfirm(conn net.Conn) error {
 	if err != nil {
 		return err
 	}
-	r, err := ParseConfirmResult(b)
+	r, err := UnmarshalAuthNResult(b)
 	if err != nil {
 		return err
 	}
